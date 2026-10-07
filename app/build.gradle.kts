@@ -16,6 +16,17 @@ android {
         versionName = "0.1"
     }
 
+    // CI가 빌드할 때마다 새 디버그 키를 만들면 업데이트 설치가 서명 충돌로 실패해서,
+    // 저장소에 고정된 디버그 키로 서명한다. (디버그 전용, 비밀 아님)
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
