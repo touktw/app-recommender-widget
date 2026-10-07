@@ -14,6 +14,10 @@ data class Recommendation(
     val packageName: String,
     val label: String,
     val score: Double,
+    /** 그 시간대 사용 횟수 (최근성·요일 가중치 반영) */
+    val uses: Double,
+    /** 전체 사용 중 그 시간대 비율 (0~1) */
+    val share: Double,
 )
 
 /**
@@ -58,15 +62,20 @@ object Recommender {
         limit: Int = 5,
         now: Long = System.currentTimeMillis(),
     ): List<Recommendation> {
+        val hour = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.HOUR_OF_DAY)
+        return rank(context, loadHistograms(context, now), hour, limit)
+    }
+
+    /** 앱별 0~23시 사용 히스토그램. 런처에서 열 수 있는 앱만 담는다. */
+    fun loadHistograms(
+        context: Context,
+        now: Long = System.currentTimeMillis(),
+    ): Map<String, DoubleArray> {
         val usm = context.getSystemService(UsageStatsManager::class.java)
         val pm = context.packageManager
         val excluded = excludedPackages(context)
+        val nowWeekend = isWeekend(Calendar.getInstance().apply { timeInMillis = now })
 
-        val nowCal = Calendar.getInstance().apply { timeInMillis = now }
-        val nowHour = nowCal.get(Calendar.HOUR_OF_DAY)
-        val nowWeekend = isWeekend(nowCal)
-
-        // 앱별 1시간 단위 사용 히스토그램
         val histograms = HashMap<String, DoubleArray>()
         val cal = Calendar.getInstance()
         val events = usm.queryEvents(now - LOOKBACK_DAYS * DAY_MS, now)
@@ -94,18 +103,29 @@ object Recommender {
             histograms.getOrPut(pkg) { DoubleArray(HOURS) }[cal.get(Calendar.HOUR_OF_DAY)] +=
                 recency * dayType
         }
-
-        val scores = histograms.mapValues { (_, hist) -> score(hist, nowHour) }
-            .filterValues { it > 0.0 }
-
-        return scores.entries
-            .sortedByDescending { it.value }
-            .asSequence()
-            .filter { pm.getLaunchIntentForPackage(it.key) != null }
-            .map { Recommendation(it.key, labelOf(context, it.key), it.value) }
-            .take(limit)
-            .toList()
+        return histograms.filterKeys { pm.getLaunchIntentForPackage(it) != null }
     }
+
+    /** 히스토그램으로 특정 시간대(0~23시)의 순위를 매긴다. */
+    fun rank(
+        context: Context,
+        histograms: Map<String, DoubleArray>,
+        hour: Int,
+        limit: Int = Int.MAX_VALUE,
+    ): List<Recommendation> = histograms.entries
+        .map { (pkg, hist) -> pkg to hist }
+        .filter { (_, hist) -> hist[hour] > 0.0 }
+        .sortedByDescending { (_, hist) -> score(hist, hour) }
+        .take(limit)
+        .map { (pkg, hist) ->
+            Recommendation(
+                packageName = pkg,
+                label = labelOf(context, pkg),
+                score = score(hist, hour),
+                uses = hist[hour],
+                share = hist[hour] / hist.sum(),
+            )
+        }
 
     /** 지금 시간대 사용 횟수 × 시간대 집중도 */
     internal fun score(hist: DoubleArray, hour: Int): Double {
