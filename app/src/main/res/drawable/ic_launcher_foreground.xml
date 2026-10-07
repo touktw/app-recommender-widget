@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 전경: 앱 칸 3개 + 시계(시간대 추천) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#B3FFFFFF" android:pathData="M36,57h10a5,5 0,0 1,5,5v10a5,5 0,0 1,-5,5h-10a5,5 0,0 1,-5,-5v-10a5,5 0,0 1,5,-5z M62,57h10a5,5 0,0 1,5,5v10a5,5 0,0 1,-5,5h-10a5,5 0,0 1,-5,-5v-10a5,5 0,0 1,5,-5z M36,31h10a5,5 0,0 1,5,5v10a5,5 0,0 1,-5,5h-10a5,5 0,0 1,-5,-5v-10a5,5 0,0 1,5,-5z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M56.0,41.0a11.0,11.0 0,1 1,22.0,0a11.0,11.0 0,1 1,-22.0,0z" />
+    <path android:strokeColor="#FF3D5AFE" android:strokeWidth="2.4" android:strokeLineCap="round"
+        android:pathData="M67.0,41.0v-6.5M67.0,41.0l4.5,3" />
+</vector>
