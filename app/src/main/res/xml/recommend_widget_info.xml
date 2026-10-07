@@ -2,6 +2,7 @@
 <!-- 기본 2x1, 세로로 늘리면 2x2 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
+    android:previewImage="@drawable/widget_preview"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="110dp"
     android:minHeight="40dp"
