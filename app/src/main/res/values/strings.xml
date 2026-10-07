@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">앱 추천 위젯</string>
+    <string name="widget_name">지금 쓸 앱</string>
+    <string name="widget_description">이 시간대에 자주 쓰던 앱을 추천해요</string>
+</resources>

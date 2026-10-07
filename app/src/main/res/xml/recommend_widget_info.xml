@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 기본 2x1, 세로로 늘리면 2x2 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:maxResizeWidth="180dp"
+    android:maxResizeHeight="180dp"
+    android:resizeMode="vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />
