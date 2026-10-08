@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
 
 /**
  * 위젯의 더보기 화면: 시간대별(0~23시) 추천 순위.
- * 위쪽 시간 칩으로 시간대를 고르면 그 시간의 순위를 보여준다. 처음엔 지금 시간대.
+ * 위쪽 요일·시간 칩으로 고르면 그 요일·시간대의 순위를 보여준다. 처음엔 지금.
  * 각 앱의 핀 버튼으로 고정하면 위젯 앞칸에 점수와 상관없이 항상 나온다.
  */
 class MainActivity : ComponentActivity() {
@@ -35,12 +35,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionButton: Button
     private lateinit var hourScroll: HorizontalScrollView
     private lateinit var hourStrip: LinearLayout
+    private lateinit var dayStrip: LinearLayout
     private lateinit var title: TextView
     private lateinit var pinSection: LinearLayout
     private lateinit var list: LinearLayout
     private val dp get() = resources.displayMetrics.density
 
-    private var histograms: Map<String, DoubleArray> = emptyMap()
+    private var grids: Map<String, UsageGrid> = emptyMap()
+    private var selectedDay = currentDay()
     private var selectedHour = currentHour()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +60,11 @@ class MainActivity : ComponentActivity() {
             addView(hourStrip)
         }
         for (h in 0 until 24) hourStrip.addView(hourChip(h))
+        dayStrip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, (12 * dp).toInt(), 0, 0)
+        }
+        for (d in 0 until 7) dayStrip.addView(dayChip(d))
         title = TextView(this).apply {
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
@@ -75,6 +82,7 @@ class MainActivity : ComponentActivity() {
                         addView(status)
                         addView(permissionButton)
                         addView(pinSection)
+                        addView(dayStrip)
                         addView(hourScroll)
                         addView(title)
                         addView(list)
@@ -90,6 +98,7 @@ class MainActivity : ComponentActivity() {
         permissionButton.visibility = if (hasAccess) View.GONE else View.VISIBLE
         hourScroll.visibility = if (hasAccess) View.VISIBLE else View.GONE
         title.visibility = hourScroll.visibility
+        dayStrip.visibility = hourScroll.visibility
         if (!hasAccess) {
             status.text = "추천하려면 사용 기록 접근을 허용해야 해요. 아래 버튼에서 이 앱을 켜 주세요."
             list.removeAllViews()
@@ -97,31 +106,34 @@ class MainActivity : ComponentActivity() {
             return
         }
         showPins()
-        status.text = "최근 4주 사용 기록 기준, 시간대별 순위예요."
+        status.text = "최근 4주 사용 기록 기준, 요일·시간대별 순위예요."
         RefreshWorker.schedule(this)
+        selectedDay = currentDay()
         selectedHour = currentHour()
         lifecycleScope.launch {
-            histograms = withContext(Dispatchers.IO) { Recommender.loadHistograms(this@MainActivity) }
-            showHour(selectedHour)
+            grids = withContext(Dispatchers.IO) { Recommender.loadGrids(this@MainActivity) }
+            showSlot(selectedDay, selectedHour)
             RecommendWidget().updateAll(this@MainActivity)
         }
     }
 
-    private fun showHour(hour: Int) {
+    private fun showSlot(day: Int, hour: Int) {
+        selectedDay = day
         selectedHour = hour
+        for (d in 0 until 7) styleChip(dayStrip.getChildAt(d) as TextView, d == day)
         for (h in 0 until 24) styleChip(hourStrip.getChildAt(h) as TextView, h == hour)
         hourStrip.getChildAt(hour).let { chip ->
             hourScroll.post { hourScroll.smoothScrollTo(chip.left - hourScroll.width / 2 + chip.width / 2, 0) }
         }
-        val nowMark = if (hour == currentHour()) " (지금)" else ""
-        title.text = "${hour}시~${(hour + 1) % 24}시 순위$nowMark"
+        val nowMark = if (day == currentDay() && hour == currentHour()) " (지금)" else ""
+        title.text = "${DAY_NAMES[day]}요일 ${hour}시~${(hour + 1) % 24}시 순위$nowMark"
 
         list.removeAllViews()
         lifecycleScope.launch {
             val recs = withContext(Dispatchers.IO) {
-                Recommender.rank(this@MainActivity, histograms, hour, limit = 20)
+                Recommender.rank(this@MainActivity, grids, day, hour, limit = 20)
             }
-            if (hour != selectedHour) return@launch
+            if (day != selectedDay || hour != selectedHour) return@launch
             if (recs.isEmpty()) {
                 list.addView(TextView(this@MainActivity).apply {
                     text = "이 시간대에는 아직 사용 기록이 없어요."
@@ -131,7 +143,10 @@ class MainActivity : ComponentActivity() {
             recs.forEachIndexed { i, rec ->
                 val sharePct = (rec.share * 100).roundToInt()
                 list.addView(
-                    row("${i + 1}", rec.packageName, rec.label, "이 시간대 비중 $sharePct% · 점수 ${rec.score.roundToInt()}"),
+                    row(
+                        "${i + 1}", rec.packageName, rec.label,
+                        "4주 중 ${rec.repeatWeeks}주 반복 · 비중 $sharePct% · 점수 ${rec.score.roundToInt()}",
+                    ),
                 )
             }
         }
@@ -146,7 +161,17 @@ class MainActivity : ComponentActivity() {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { marginEnd = (6 * dp).toInt() }
-        setOnClickListener { showHour(hour) }
+        setOnClickListener { showSlot(selectedDay, hour) }
+    }
+
+    private fun dayChip(day: Int) = TextView(this).apply {
+        text = DAY_NAMES[day]
+        textSize = 14f
+        gravity = Gravity.CENTER
+        setPadding(0, (8 * dp).toInt(), 0, (8 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            .apply { marginEnd = (4 * dp).toInt() }
+        setOnClickListener { showSlot(day, selectedHour) }
     }
 
     private fun styleChip(chip: TextView, selected: Boolean) {
@@ -185,7 +210,7 @@ class MainActivity : ComponentActivity() {
     private fun togglePin(pkg: String) {
         PinStore.toggle(this, pkg)
         showPins()
-        showHour(selectedHour)
+        showSlot(selectedDay, selectedHour)
         lifecycleScope.launch { RecommendWidget().updateAll(this@MainActivity) }
     }
 
@@ -235,6 +260,8 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         val ACCENT = Color.parseColor("#FF3D5AFE")
+        val DAY_NAMES = arrayOf("일", "월", "화", "수", "목", "금", "토")
         fun currentHour() = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        fun currentDay() = Recommender.dayOf(Calendar.getInstance())
     }
 }
