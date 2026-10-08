@@ -35,6 +35,7 @@ import androidx.glance.layout.size
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.tae.apprecommend.MainActivity
+import com.tae.apprecommend.PinStore
 import com.tae.apprecommend.R
 import com.tae.apprecommend.Recommender
 import kotlinx.coroutines.Dispatchers
@@ -69,13 +70,19 @@ class RecommendWidget : GlanceAppWidget() {
         }
     }
 
+    /** 고정한 앱을 먼저, 남은 칸은 시간대 추천으로 채운다. */
     private fun loadItems(context: Context): List<WidgetItem> {
         val pm = context.packageManager
-        return Recommender.recommend(context, limit = MAX_APPS).mapNotNull { rec ->
-            val intent = pm.getLaunchIntentForPackage(rec.packageName) ?: return@mapNotNull null
-            val icon = pm.getApplicationIcon(rec.packageName).toBitmap(96, 96)
-            WidgetItem(rec.label, icon, intent)
-        }
+        val pinned = PinStore.get(context)
+        val recommended = Recommender.recommend(context, limit = MAX_APPS + pinned.size)
+            .map { it.packageName }
+            .filterNot { it in pinned }
+        return (pinned + recommended).asSequence().mapNotNull { pkg ->
+            val intent = pm.getLaunchIntentForPackage(pkg) ?: return@mapNotNull null
+            val label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            val icon = pm.getApplicationIcon(pkg).toBitmap(96, 96)
+            WidgetItem(label, icon, intent)
+        }.take(MAX_APPS).toList()
     }
 
     @Composable
